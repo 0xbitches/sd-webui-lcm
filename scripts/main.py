@@ -19,7 +19,6 @@ Running [LCM_Dreamshaper_v7](https://huggingface.co/SimianLuo/LCM_Dreamshaper_v7
 '''
 
 MAX_SEED = np.iinfo(np.int32).max
-CACHE_EXAMPLES = torch.cuda.is_available() and os.getenv("CACHE_EXAMPLES") == "1"
 MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE", "768"))
 
 
@@ -72,7 +71,6 @@ scheduler = LCMScheduler.from_pretrained(
 pipe = LatentConsistencyModelPipeline.from_pretrained(
     "SimianLuo/LCM_Dreamshaper_v7", scheduler=scheduler)
 pipe.safety_checker = None  # ¯\_(ツ)_/¯
-pipe.to("cuda")
 
 
 def generate(
@@ -84,10 +82,22 @@ def generate(
     num_inference_steps: int = 4,
     num_images: int = 4,
     randomize_seed: bool = False,
+    use_fp16: bool = True,
+    use_torch_compile: bool = False,
     progress=gr.Progress(track_tqdm=True)
 ) -> Image.Image:
     seed = randomize_seed_fn(seed, randomize_seed)
     torch.manual_seed(seed)
+
+    if use_fp16:
+        pipe.to(torch_device="cuda", torch_dtype=torch.float16)
+    else:
+        pipe.to(torch_device="cuda", torch_dtype=torch.float32)
+
+    # Windows does not support torch.compile for now
+    if os.name != 'nt' and use_torch_compile:
+        pipe.unet = torch.compile(pipe.unet, mode='max-autotune')
+
     start_time = time.time()
     result = pipe(
         prompt=prompt,
@@ -101,7 +111,9 @@ def generate(
     ).images
     paths = save_images(result, metadata={"prompt": prompt, "seed": seed, "width": width,
                         "height": height, "guidance_scale": guidance_scale, "num_inference_steps": num_inference_steps})
-    print("LCM inference time: ", time.time() - start_time, "seconds")
+
+    elapsed_time = time.time() - start_time
+    print("LCM inference time: ", elapsed_time, "seconds")
     return paths, seed
 
 
@@ -140,6 +152,10 @@ def on_ui_tabs():
             )
             randomize_seed = gr.Checkbox(
                 label="Randomize seed across runs", value=True)
+            use_fp16 = gr.Checkbox(
+                label="Run LCM in fp16 (for lower VRAM)", value=True)
+            use_torch_compile = gr.Checkbox(
+                label="Run LCM with torch.compile (currently not supported on Windows)", value=False)
             with gr.Row():
                 width = gr.Slider(
                     label="Width",
@@ -172,20 +188,18 @@ def on_ui_tabs():
                 )
             with gr.Row():
                 num_images = gr.Slider(
-                    label="Number of images",
+                    label="Number of images (batch count)",
                     minimum=1,
-                    maximum=8,
+                    maximum=100,
                     step=1,
                     value=4,
-                    visible=False,
                 )
 
         gr.Examples(
             examples=examples,
             inputs=prompt,
             outputs=result,
-            fn=generate,
-            cache_examples=CACHE_EXAMPLES,
+            fn=generate
         )
 
         run_button.click(
@@ -198,7 +212,9 @@ def on_ui_tabs():
                 guidance_scale,
                 num_inference_steps,
                 num_images,
-                randomize_seed
+                randomize_seed,
+                use_fp16,
+                use_torch_compile
             ],
             outputs=[result, seed],
         )
