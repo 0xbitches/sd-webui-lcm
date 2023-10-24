@@ -124,9 +124,14 @@ examples = [
     "A photo of beautiful mountain with realistic sunset and blue lake, highly detailed, masterpiece",
 ]
 
-
+def load_css(filename):
+    with open(filename, encoding='utf-8') as css_file:
+        return css_file.read()
+    
 def on_ui_tabs():
-    with gr.Blocks(css="style.css") as lcm:
+    css_content = load_css("style.css")
+    with gr.Blocks(css=css_content) as lcm:
+    # with gr.Blocks(css="style.css") as lcm:
         gr.Markdown(DESCRIPTION)
         with gr.Group():
             with gr.Row():
