@@ -1,10 +1,12 @@
+import functools
+import gc
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import uuid
 from lcm.lcm_scheduler import LCMScheduler
 from lcm.lcm_pipeline import LatentConsistencyModelPipeline
 import modules.scripts as scripts
-from modules import script_callbacks, sd_models
+from modules import script_callbacks, sd_models, devices
 import os
 import random
 import time
@@ -22,11 +24,26 @@ MAX_SEED = np.iinfo(np.int32).max
 MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE", "768"))
 
 
+lora_networks_component = None
 lcm_pipe_cache = None
+
+
+def reload_ldm_hijack(*args, original_function, **kwargs):
+    global lcm_pipe_cache
+    lcm_pipe_cache = None
+    gc.collect()
+    devices.torch_gc()
+
+    return original_function(*args, **kwargs)
+
+
+sd_models.reload_model_weights = functools.partial(reload_ldm_hijack, original_function=sd_models.reload_model_weights)
+sd_models.load_model = functools.partial(reload_ldm_hijack, original_function=sd_models.load_model)
 
 
 def init_lcm_pipe():
     global lcm_pipe_cache
+
     if lcm_pipe_cache is not None:
         return lcm_pipe_cache
 
@@ -153,7 +170,7 @@ def on_ui_tabs():
                     placeholder="Enter your prompt",
                     container=False,
                 )
-                run_button = gr.Button("Run", scale=0)
+                run_button = gr.Button("Run (initializing...)", scale=0, interactive=False)
             result = gr.Gallery(
                 label="Generated images", show_label=False, elem_id="gallery", grid=[2], preview=True
             )
@@ -234,7 +251,21 @@ def on_ui_tabs():
             ],
             outputs=[result, seed],
         )
+
+        lora_networks_component.change(
+            fn=lambda: gr.Button.update(value="Run", interactive=True),
+            outputs=[run_button],
+        )
     return [(lcm, "LCM", "lcm")]
 
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
+
+
+def on_after_component(component, **kwargs):
+    global lora_networks_component
+    if getattr(component, "elem_id", None) == "img2img_lora_cards_html":
+        lora_networks_component = component
+
+
+script_callbacks.on_after_component(on_after_component)
