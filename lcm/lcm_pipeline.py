@@ -174,6 +174,7 @@ class LatentConsistencyModelPipeline(DiffusionPipeline):
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        device: Optional[Union[str, torch.device]] = None,
     ):
 
         # 0. Default height and width to unet
@@ -188,7 +189,6 @@ class LatentConsistencyModelPipeline(DiffusionPipeline):
         else:
             batch_size = prompt_embeds.shape[0]
 
-        device = modules.shared.device
         # do_classifier_free_guidance = guidance_scale > 0.0  # In LCM Implementation:  cfg_noise = noise_cond + cfg_scale * (noise_cond - noise_uncond) , (cfg_scale > 0.0 using CFG)
 
         # 3. Encode input prompt

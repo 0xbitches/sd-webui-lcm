@@ -4,6 +4,7 @@ import uuid
 from lcm.lcm_scheduler import LCMScheduler
 from lcm.lcm_pipeline import LatentConsistencyModelPipeline
 import modules.scripts as scripts
+import modules.shared
 from modules import script_callbacks
 import os
 import random
@@ -84,15 +85,23 @@ def generate(
     randomize_seed: bool = False,
     use_fp16: bool = True,
     use_torch_compile: bool = False,
+    use_cpu: bool = False,
     progress=gr.Progress(track_tqdm=True)
 ) -> Image.Image:
     seed = randomize_seed_fn(seed, randomize_seed)
     torch.manual_seed(seed)
 
+    selected_device = modules.shared.device
+    if use_cpu:
+        selected_device = "cpu"
+        if use_fp16:
+            use_fp16 = False
+            print("LCM warning: running on CPU, overrode FP16 with FP32")
+
     if use_fp16:
-        pipe.to(torch_device="cuda", torch_dtype=torch.float16)
+        pipe.to(torch_device=selected_device, torch_dtype=torch.float16)
     else:
-        pipe.to(torch_device="cuda", torch_dtype=torch.float32)
+        pipe.to(torch_device=selected_device, torch_dtype=torch.float32)
 
     # Windows does not support torch.compile for now
     if os.name != 'nt' and use_torch_compile:
@@ -108,6 +117,7 @@ def generate(
         num_images_per_prompt=num_images,
         lcm_origin_steps=50,
         output_type="pil",
+        device = selected_device
     ).images
     paths = save_images(result, metadata={"prompt": prompt, "seed": seed, "width": width,
                         "height": height, "guidance_scale": guidance_scale, "num_inference_steps": num_inference_steps})
@@ -156,6 +166,7 @@ def on_ui_tabs():
                 label="Run LCM in fp16 (for lower VRAM)", value=True)
             use_torch_compile = gr.Checkbox(
                 label="Run LCM with torch.compile (currently not supported on Windows)", value=False)
+            use_cpu = gr.Checkbox(label="Run LCM on CPU", value=False)
             with gr.Row():
                 width = gr.Slider(
                     label="Width",
@@ -214,7 +225,8 @@ def on_ui_tabs():
                 num_images,
                 randomize_seed,
                 use_fp16,
-                use_torch_compile
+                use_torch_compile,
+                use_cpu
             ],
             outputs=[result, seed],
         )
