@@ -4,7 +4,7 @@ import uuid
 from lcm.lcm_scheduler import LCMScheduler
 from lcm.lcm_pipeline import LatentConsistencyModelPipeline
 import modules.scripts as scripts
-from modules import script_callbacks
+from modules import script_callbacks, sd_models
 import os
 import random
 import time
@@ -20,6 +20,28 @@ Running [LCM_Dreamshaper_v7](https://huggingface.co/SimianLuo/LCM_Dreamshaper_v7
 
 MAX_SEED = np.iinfo(np.int32).max
 MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE", "768"))
+
+
+lcm_pipe_cache = None
+
+
+def init_lcm_pipe():
+    global lcm_pipe_cache
+    if lcm_pipe_cache is not None:
+        return lcm_pipe_cache
+
+    # unload ldm so that the lcm pipeline fits into memory
+    sd_models.unload_model_weights()
+
+    scheduler = LCMScheduler.from_pretrained(
+        "SimianLuo/LCM_Dreamshaper_v7", subfolder="scheduler")
+    pipe = lcm_pipe_cache = LatentConsistencyModelPipeline.from_pretrained(
+        "SimianLuo/LCM_Dreamshaper_v7", scheduler=scheduler)
+    pipe.safety_checker = None  # ¯\_(ツ)_/¯
+
+    print("Loaded LCM pipeline.")
+
+    return pipe
 
 
 class Script(scripts.Script):
@@ -79,12 +101,7 @@ def generate(
     use_torch_compile: bool = False,
     progress=gr.Progress(track_tqdm=True)
 ) -> Image.Image:
-    scheduler = LCMScheduler.from_pretrained(
-        "SimianLuo/LCM_Dreamshaper_v7", subfolder="scheduler")
-    pipe = LatentConsistencyModelPipeline.from_pretrained(
-        "SimianLuo/LCM_Dreamshaper_v7", scheduler=scheduler)
-    pipe.safety_checker = None  # ¯\_(ツ)_/¯
-
+    pipe = init_lcm_pipe()
     seed = randomize_seed_fn(seed, randomize_seed)
     torch.manual_seed(seed)
 
