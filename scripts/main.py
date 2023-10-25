@@ -136,7 +136,7 @@ examples = [
 
 
 def on_ui_tabs():
-    with gr.Blocks(css="style.css") as lcm:
+    with gr.Blocks() as lcm:
         gr.Markdown(DESCRIPTION)
         with gr.Group():
             with gr.Row():
