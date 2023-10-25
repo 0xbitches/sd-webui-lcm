@@ -66,13 +66,6 @@ def save_images(image_array, metadata: dict):
     return paths
 
 
-scheduler = LCMScheduler.from_pretrained(
-    "SimianLuo/LCM_Dreamshaper_v7", subfolder="scheduler")
-pipe = LatentConsistencyModelPipeline.from_pretrained(
-    "SimianLuo/LCM_Dreamshaper_v7", scheduler=scheduler)
-pipe.safety_checker = None  # ¯\_(ツ)_/¯
-
-
 def generate(
     prompt: str,
     seed: int = 0,
@@ -86,6 +79,12 @@ def generate(
     use_torch_compile: bool = False,
     progress=gr.Progress(track_tqdm=True)
 ) -> Image.Image:
+    scheduler = LCMScheduler.from_pretrained(
+        "SimianLuo/LCM_Dreamshaper_v7", subfolder="scheduler")
+    pipe = LatentConsistencyModelPipeline.from_pretrained(
+        "SimianLuo/LCM_Dreamshaper_v7", scheduler=scheduler)
+    pipe.safety_checker = None  # ¯\_(ツ)_/¯
+
     seed = randomize_seed_fn(seed, randomize_seed)
     torch.manual_seed(seed)
 
