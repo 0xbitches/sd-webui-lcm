@@ -40,9 +40,3 @@ Find the file `added_tokens.json` and change the contents to:
 ```
 
 or simply remove it.
-
-#### 2. `torch.cuda.OutOfMemoryError...`
-
-This is because Automatic1111 loads an SD checkpoint on top of LCM.
-
-Try Settings -> Actions -> Unload SD checkpoint to free VRAM
