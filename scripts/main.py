@@ -129,7 +129,7 @@ def load_css(filename):
         return css_file.read()
     
 def on_ui_tabs():
-    css_content = load_css("style.css")
+    css_content = load_css("styles.css")
     with gr.Blocks(css=css_content) as lcm:
     # with gr.Blocks(css="style.css") as lcm:
         gr.Markdown(DESCRIPTION)
