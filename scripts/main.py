@@ -25,6 +25,7 @@ MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE", "768"))
 
 
 lora_networks_component = None
+lora_networks_callbacks = []
 lcm_pipe_cache = None
 
 
@@ -252,10 +253,18 @@ def on_ui_tabs():
             outputs=[result, seed],
         )
 
-        lora_networks_component.change(
-            fn=lambda: gr.Button.update(value="Run", interactive=True),
-            outputs=[run_button],
-        )
+        def enable_run_button_on_change(component):
+            component.change(
+                fn=lambda: gr.Button.update(value="Run", interactive=True),
+                outputs=[run_button],
+            )
+
+        global lora_networks_component
+        if lora_networks_component is not None:
+            enable_run_button_on_change(lora_networks_component)
+        else:
+            lora_networks_callbacks.append(enable_run_button_on_change)
+
     return [(lcm, "LCM", "lcm")]
 
 
@@ -266,6 +275,8 @@ def on_after_component(component, **kwargs):
     global lora_networks_component
     if getattr(component, "elem_id", None) == "img2img_lora_cards_html":
         lora_networks_component = component
+        for callback in lora_networks_callbacks:
+            callback(component)
 
 
 script_callbacks.on_after_component(on_after_component)
