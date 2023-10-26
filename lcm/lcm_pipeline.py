@@ -169,7 +169,7 @@ class LatentConsistencyModelPipeline(DiffusionPipeline):
         num_images_per_prompt: Optional[int] = 1,
         latents: Optional[torch.FloatTensor] = None,
         num_inference_steps: int = 4,
-        lcm_origin_steps: int = 50,
+        original_inference_steps: int = 50,
         prompt_embeds: Optional[torch.FloatTensor] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
@@ -200,7 +200,7 @@ class LatentConsistencyModelPipeline(DiffusionPipeline):
         )
 
         # 4. Prepare timesteps
-        self.scheduler.set_timesteps(num_inference_steps, lcm_origin_steps)
+        self.scheduler.set_timesteps(num_inference_steps, original_inference_steps)
         timesteps = self.scheduler.timesteps
 
         # 5. Prepare latent variable
