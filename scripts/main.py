@@ -189,6 +189,134 @@ def generate_i2i(
     print("LCM inference time: ", elapsed_time, "seconds")
     return paths, seed
 
+import cv2
+
+def video_to_frames(video_path):
+    # Open the video file
+    cap = cv2.VideoCapture(video_path)
+    
+    # Check if the video opened successfully
+    if not cap.isOpened():
+        print("Error: LCM Could not open video.")
+        return
+    
+    # Read frames from the video
+    pil_images = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Convert BGR to RGB (OpenCV uses BGR by default)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # Convert numpy array to PIL Image
+        pil_image = Image.fromarray(rgb_frame)
+        
+        # Append the PIL Image to the list
+        pil_images.append(pil_image)
+    
+    # Release the video capture object
+    cap.release()
+    
+    return pil_images
+
+def frames_to_video(pil_images, output_path, fps):
+    if not pil_images:
+        print("Error: No images to convert.")
+        return
+    
+    img_array = []
+    for pil_image in pil_images:
+        img_array.append(np.array(pil_image))
+    
+    height, width, layers = img_array[0].shape
+    size = (width, height)
+    
+    out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, size)
+    for i in range(len(img_array)):
+        out.write(cv2.cvtColor(img_array[i], cv2.COLOR_RGB2BGR))
+    out.release()
+
+def generate_v2v(
+    prompt: str,
+    video: any = None,
+    strength: float = 0.8,
+    seed: int = 0,
+    guidance_scale: float = 8.0,
+    num_inference_steps: int = 4,
+    randomize_seed: bool = False,
+    use_fp16: bool = True,
+    use_torch_compile: bool = False,
+    use_cpu: bool = False,
+    fps: int = 10,
+    save_frames: bool = False,
+    # progress=gr.Progress(track_tqdm=True),
+    width: Optional[int] = 512,
+    height: Optional[int] = 512,
+    num_images: Optional[int] = 1,
+) -> Image.Image:
+    seed = randomize_seed_fn(seed, randomize_seed)
+    torch.manual_seed(seed)
+
+    selected_device = modules.shared.device
+    if use_cpu:
+        selected_device = "cpu"
+        if use_fp16:
+            use_fp16 = False
+            print("LCM warning: running on CPU, overrode FP16 with FP32")
+
+    pipe = LatentConsistencyModelImg2ImgPipeline.from_pretrained(
+        "SimianLuo/LCM_Dreamshaper_v7", safety_checker = None)
+
+    if use_fp16:
+        pipe.to(torch_device=selected_device, torch_dtype=torch.float16)
+    else:
+        pipe.to(torch_device=selected_device, torch_dtype=torch.float32)
+
+    # Windows does not support torch.compile for now
+    if os.name != 'nt' and use_torch_compile:
+        pipe.unet = torch.compile(pipe.unet, mode='max-autotune')
+
+    frames = video_to_frames(video)
+    if frames is None:
+        print("Error: LCM could not convert video.")
+        return
+    width, height = frames[0].size
+
+    start_time = time.time()
+
+    results = []
+    for frame in frames:
+        result = pipe(
+            prompt=prompt,
+            image=frame,
+            strength=strength,
+            width=width,
+            height=height,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_inference_steps,
+            num_images_per_prompt=1,
+            original_inference_steps=50,
+            output_type="pil",
+            device = selected_device
+        ).images
+        if save_frames:
+            paths = save_images(result, metadata={"prompt": prompt, "seed": seed, "width": width,
+                                "height": height, "guidance_scale": guidance_scale, "num_inference_steps": num_inference_steps})
+        results.extend(result)
+
+    elapsed_time = time.time() - start_time
+    print("LCM vid2vid inference complete! Processing", len(frames), "frames took", elapsed_time, "seconds")
+    
+    save_dir = os.path.join(scripts.basedir(), "outputs/LCM-vid2vid/")
+    Path(save_dir).mkdir(exist_ok=True, parents=True)
+    unique_id = uuid.uuid4()
+    _, input_ext = os.path.splitext(video)
+    output_path = save_dir + f"{unique_id}-{seed}" + f"{input_ext}"
+    frames_to_video(results, output_path, fps)
+    return output_path
+
 
 
 examples = [
@@ -376,6 +504,87 @@ def on_ui_tabs():
                 ],
                 outputs=[result, seed],
             )
+        
+        
+        with gr.Tab("LCM vid2vid"):
+            with gr.Row():
+                prompt = gr.Textbox(label="Prompt", 
+                                    show_label=False, 
+                                    lines=3, 
+                                    placeholder="Prompt", 
+                                    elem_classes=["prompt"])       
+                run_v2v_button = gr.Button("Run", scale=0)
+            with gr.Row():
+                video_input = gr.Video(label="Source Video")
+                video_output = gr.Video(label="Generated Video")
+
+            with gr.Accordion("Advanced options", open=False):
+                seed = gr.Slider(
+                    label="Seed",
+                    minimum=0,
+                    maximum=MAX_SEED,
+                    step=1,
+                    value=0,
+                    randomize=True
+                )
+                randomize_seed = gr.Checkbox(
+                    label="Randomize seed across runs", value=True)
+                use_fp16 = gr.Checkbox(
+                    label="Run LCM in fp16 (for lower VRAM)", value=True)
+                use_torch_compile = gr.Checkbox(
+                    label="Run LCM with torch.compile (currently not supported on Windows)", value=False)
+                use_cpu = gr.Checkbox(label="Run LCM on CPU", value=False)
+                save_frames = gr.Checkbox(label="Save intermediate frames", value=False)                   
+                with gr.Row():
+                    guidance_scale = gr.Slider(
+                        label="Guidance scale for base",
+                        minimum=2,
+                        maximum=14,
+                        step=0.1,
+                        value=8.0,
+                    )
+                    num_inference_steps = gr.Slider(
+                        label="Number of inference steps for base",
+                        minimum=1,
+                        maximum=8,
+                        step=1,
+                        value=4,
+                    )
+                with gr.Row():
+                    fps = gr.Slider(
+                        label="Output FPS",
+                        minimum=1,
+                        maximum=200,
+                        step=1,
+                        value=10,
+                    )
+                    strength = gr.Slider(
+                        label="Prompt Strength",
+                        minimum=0.1,
+                        maximum=1.0,
+                        step=0.05,
+                        value=0.5,
+                    )
+
+            run_v2v_button.click(
+                fn=generate_v2v,
+                inputs=[
+                    prompt,
+                    video_input,
+                    strength,
+                    seed,
+                    guidance_scale,
+                    num_inference_steps,
+                    randomize_seed,
+                    use_fp16,
+                    use_torch_compile,
+                    use_cpu,
+                    fps,
+                    save_frames
+                ],
+                outputs=video_output,
+            )
+        
         
 
     return [(lcm, "LCM", "lcm")]
