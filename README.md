@@ -13,8 +13,9 @@ Note that LCMs are a completely different class of models than Stable Diffusion,
 - [Installation:](#installation)
 - [Img2Img / Vid2Vid](#img2img--vid2vid)
 - [Known Issues](#known-issues)
-  - [1. `ValueError: Non-consecutive added token '<|startoftext|>' found. Should have index 49408 but has index 49406 in saved vocabulary.`](#1-valueerror-non-consecutive-added-token-startoftext-found-should-have-index-49408-but-has-index-49406-in-saved-vocabulary)
-  - [2. `torch.cuda.OutOfMemoryError...`](#2-torchcudaoutofmemoryerror)
+  - [1. Can't Find 'LCM' tab or `ImportError: cannot import name 'xxx' from 'diffusers.xxx'`](#1-cant-find-lcm-tab-or-importerror-cannot-import-name-xxx-from-diffusersxxx)
+  - [2. `ValueError: Non-consecutive added token '<|startoftext|>' found. Should have index 49408 but has index 49406 in saved vocabulary.`](#2-valueerror-non-consecutive-added-token-startoftext-found-should-have-index-49408-but-has-index-49406-in-saved-vocabulary)
+  - [3. `torch.cuda.OutOfMemoryError...`](#3-torchcudaoutofmemoryerror)
 
 ## Installation:
 
@@ -42,7 +43,21 @@ Generated videos will be saved to `outputs/LCM-vid2vid`.
 
 ## Known Issues
 
-#### 1. `ValueError: Non-consecutive added token '<|startoftext|>' found. Should have index 49408 but has index 49406 in saved vocabulary.`
+#### 1. Can't Find 'LCM' tab or `ImportError: cannot import name 'xxx' from 'diffusers.xxx'`
+
+This is usually due to the installed version of `diffusers` in your `venv` is not up-to-date.
+
+To check the version you have, go to `stable-diffusion-webui/venv/Scripts` and run the activate script (`Activate.ps1` on Windows).
+
+Then, run `pip show diffusers` to see the version installed.
+
+To upgrade `diffusers` to the latest version, run `pip3 install --upgrade diffusers`.
+
+If the problem still persists, then you likely have an extension that force installs an old version of `diffusers`.
+
+[EasyPhoto](https://github.com/aigc-apps/sd-webui-EasyPhot), for example, force installs `diffusers=0.18.2`.
+
+#### 2. `ValueError: Non-consecutive added token '<|startoftext|>' found. Should have index 49408 but has index 49406 in saved vocabulary.`
 
 To resolve this, locate your huggingface hub cache directory.
 
@@ -59,7 +74,7 @@ Find the file `added_tokens.json` and change the contents to:
 
 or simply remove it.
 
-#### 2. `torch.cuda.OutOfMemoryError...`
+#### 3. `torch.cuda.OutOfMemoryError...`
 
 This is because Automatic1111 loads an SD checkpoint on top of LCM.
 
