@@ -43,7 +43,7 @@ Generated videos will be saved to `outputs/LCM-vid2vid`.
 
 ## Known Issues
 
-#### 1. Can't Find 'LCM' tab or `ImportError: cannot import name 'xxx' from 'diffusers.xxx'`
+#### 1. Can't Find 'LCM' tab or `ImportError: cannot import name 'xxx' from 'diffusers.xxx'` or `AttributeError: module diffusers has no attribute LCMScheduler`
 
 This is usually due to the installed version of `diffusers` in your `venv` is not up-to-date.
 
